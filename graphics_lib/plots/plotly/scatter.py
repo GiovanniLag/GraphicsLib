@@ -1,0 +1,552 @@
+from __future__ import annotations
+
+from itertools import cycle
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from graphics_lib.backends.plotly import PlotlyPlot
+from graphics_lib.utils.color_helpers import (
+    get_plot_colors,
+    interpolate_colors,
+)
+
+"""
+Scatter plot implementation using Plotly.
+
+This module provides an interactive scatter plot class that supports
+different colors, sizes, and shapes for individual points.
+"""
+
+if TYPE_CHECKING:
+    from graphics_lib.colours import Palette
+    from graphics_lib.typography import Typography
+
+
+class ScatterPlot(PlotlyPlot):
+    """
+    Interactive scatter plot supporting single or multiple data series.
+
+    This class creates interactive scatter plots with automatic color
+    management, gradient support, point-wise color control, size
+    variation, and different marker shapes. It fully integrates with
+    palette and typography settings and supports both single and
+    multiple data series.
+
+    Parameters
+    ----------
+    x : array-like or list of array-like
+        X data for the plot(s). Can be a single array or list of
+        arrays for multiple scatter series.
+    y : array-like or list of array-like
+        Y data for the plot(s). Can be a single array or list of
+        arrays for multiple scatter series.
+    title : str, optional
+        Title of the plot. Default is 'Scatter Plot'.
+    palette : Union[str, Palette, None], optional
+        The color palette for the plot. Can be a Palette object or
+        a string name for registry lookup. Default is None.
+    typography : Union[str, Typography, None], optional
+        The typography settings for the plot. Can be a Typography
+        object or a string name for registry lookup. Default is None.
+    xlabel : str, optional
+        Label for the x-axis. Default is 'X-axis'.
+    ylabel : str, optional
+        Label for the y-axis. Default is 'Y-axis'.
+    figsize : tuple, optional
+        Figure size in pixels (width, height). Default is (1000, 600).
+    labels : str or list of str, optional
+        Legend labels for the scatter series. Can be a single string
+        or list of strings. Default is None.
+    colors : str, list of str, or list of list of str, optional
+        Colors for the scatter points. Can be:
+        - A single color string (applied to all points)
+        - A list of colors (one per series, or cycled)
+        - A list of lists (point-wise colors for each series)
+        If not provided, colors will be automatically cycled from the
+        palette. Default is None.
+    sizes : float, array-like, or list of array-like, optional
+        Marker sizes for the scatter points. Can be:
+        - A single float (applied to all points)
+        - An array (point-wise sizes for single series)
+        - A list of arrays (point-wise sizes for each series)
+        Default is 10.
+    marker : str or list of str, optional
+        Marker symbol(s) for the scatter points. Can be a single
+        marker or list of markers. Available markers include:
+        'circle', 'square', 'diamond', 'cross', 'x', 'triangle-up',
+        'triangle-down', 'star', etc. Default is 'circle'.
+    opacity : float or list of float, optional
+        Opacity level(s) for the scatter points. Can be a single
+        value or list of values. Default is 0.7.
+    gradient : bool, optional
+        If True, interpolates between the colors in the 'colors' list
+        to create a gradient across all series. If False, colors are
+        used as discrete values. Default is False.
+    show_legend : bool, optional
+        Whether to display the legend. Default is True.
+    **kwargs
+        Additional keyword arguments for plot customization.
+
+    Attributes
+    ----------
+    x_data : list of np.ndarray
+        List of x-axis data arrays.
+    y_data : list of np.ndarray
+        List of y-axis data arrays.
+    n_plots : int
+        Number of scatter series to plot.
+    plot_labels : list
+        Labels for each scatter series.
+    plot_colors : list
+        Colors for each scatter series or individual points.
+    plot_sizes : list
+        Sizes for points in each scatter series.
+    plot_markers : list
+        Marker symbols for each scatter series.
+    plot_opacities : list
+        Opacity values for each scatter series.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from graphics_lib.plots.plotly import ScatterPlot
+    >>>
+    >>> # Single scatter plot with uniform colors
+    >>> x = np.random.rand(50)
+    >>> y = np.random.rand(50)
+    >>> plot = ScatterPlot(
+    ...     x, y,
+    ...     title='Random Points',
+    ...     palette='qscience'
+    ... )
+    >>> plot.show()
+    >>>
+    >>> # Single scatter plot with different colors per point
+    >>> x = np.random.rand(50)
+    >>> y = np.random.rand(50)
+    >>> colors = ['red' if xi > 0.5 else 'blue' for xi in x]
+    >>> plot = ScatterPlot(
+    ...     x, y,
+    ...     title='Colored by X value',
+    ...     colors=colors,
+    ...     palette='qscience'
+    ... )
+    >>> plot.show()
+    >>>
+    >>> # Multiple scatter series with different markers
+    >>> x = [np.random.rand(30), np.random.rand(30)]
+    >>> y = [np.random.rand(30), np.random.rand(30)]
+    >>> plot = ScatterPlot(
+    ...     x, y,
+    ...     title='Multiple Series',
+    ...     labels=['Group A', 'Group B'],
+    ...     marker=['circle', 'square'],
+    ...     palette='qscience'
+    ... )
+    >>> plot.show()
+    """
+
+    def __init__(
+        self,
+        x: np.ndarray | list[np.ndarray],
+        y: np.ndarray | list[np.ndarray],
+        title: str = 'Scatter Plot',
+        palette: str | Palette | None = None,
+        typography: str | Typography | None = None,
+        xlabel: str = 'X-axis',
+        ylabel: str = 'Y-axis',
+        figsize: tuple = (1000, 600),
+        labels: str | list[str] | None = None,
+        colors: (
+            str | list[str] | list[list[str]] | None
+        ) = None,
+        sizes: float | np.ndarray | list | None = None,
+        marker: str | list[str] = 'circle',
+        opacity: float | list[float] = 0.7,
+        gradient: bool = False,
+        show_legend: bool = True,
+        **kwargs
+    ) -> None:
+        """Initialize the scatter plot and render it."""
+        super().__init__(
+            title=title,
+            palette=palette,
+            typography=typography,
+            figsize=figsize,
+            **kwargs
+        )
+
+        # Store plot-specific attributes
+        self.xlabel = xlabel
+        self.ylabel = ylabel
+        self.gradient = gradient
+        self.show_legend = show_legend
+
+        # Process data into lists for consistent handling
+        self.x_data, self.y_data = self._normalize_data(x, y)
+        self.n_plots = len(self.y_data)
+
+        # Process labels and visual properties
+        self.plot_labels = self._process_labels(labels)
+        self.plot_colors = self._process_colors(colors)
+        self.plot_sizes = self._process_sizes(sizes)
+        self.plot_markers = self._process_markers(marker)
+        self.plot_opacities = self._process_opacities(opacity)
+
+        # Render the plot
+        self._render()
+
+    def _normalize_data(
+        self,
+        x: np.ndarray | list[np.ndarray],
+        y: np.ndarray | list[np.ndarray]
+    ) -> tuple:
+        """
+        Normalize input data to lists of arrays.
+
+        Parameters
+        ----------
+        x : array-like or list of array-like
+            X data.
+        y : array-like or list of array-like
+            Y data.
+
+        Returns
+        -------
+        tuple
+            (x_data, y_data) as lists of numpy arrays.
+        """
+        def _to_list(data):
+            """Convert single items or lists to lists."""
+            if isinstance(data, (list, tuple)):
+                # Check if it's multiple plots or single plot
+                if (len(data) > 0 and hasattr(data[0], '__len__') and
+                        not isinstance(data[0], str)):
+                    return [np.asarray(d) for d in data]
+                else:
+                    return [np.asarray(data)]
+            else:
+                return [np.asarray(data)]
+
+        x_data = _to_list(x)
+        y_data = _to_list(y)
+
+        # Broadcast x or y if necessary
+        if len(x_data) == 1 and len(y_data) > 1:
+            x_data = x_data * len(y_data)
+        elif len(y_data) == 1 and len(x_data) > 1:
+            y_data = y_data * len(x_data)
+        elif len(x_data) != len(y_data):
+            raise ValueError(
+                f"Number of x datasets ({len(x_data)}) must match "
+                f"number of y datasets ({len(y_data)})"
+            )
+
+        return x_data, y_data
+
+    def _process_labels(
+        self,
+        labels: str | list[str] | None
+    ) -> list[str | None]:
+        """
+        Process labels into a list matching the number of plots.
+
+        Parameters
+        ----------
+        labels : str, list of str, or None
+            Input labels.
+
+        Returns
+        -------
+        List[Optional[str]]
+            List of labels, one per plot.
+        """
+        if labels is None:
+            return [None] * self.n_plots
+        elif isinstance(labels, str):
+            if self.n_plots == 1:
+                return [labels]
+            else:
+                return [f"{labels} {i+1}" for i in range(self.n_plots)]
+        elif isinstance(labels, (list, tuple)):
+            plot_labels = list(labels)
+            # Pad with None if not enough labels provided
+            while len(plot_labels) < self.n_plots:
+                plot_labels.append(None)
+            return plot_labels
+        else:
+            return [None] * self.n_plots
+
+    def _process_colors(
+        self,
+        colors: str | list[str] | list[list[str]] | None
+    ) -> list:
+        """
+        Process colors into appropriate format for each plot.
+
+        Supports:
+        - Single color (applied to all plots)
+        - List of colors (one per series or cycled)
+        - List of lists (point-wise colors for each series)
+
+        Parameters
+        ----------
+        colors : str, list of str, list of lists, or None
+            Input colors.
+
+        Returns
+        -------
+        list
+            List of colors for each series (can be single colors or
+            arrays for point-wise coloring).
+        """
+        if colors is None:
+            return get_plot_colors(self.palette, self.n_plots)
+        elif isinstance(colors, str):
+            return [colors] * self.n_plots
+        elif isinstance(colors, (list, tuple)):
+            # Check if it's point-wise colors (list of lists)
+            if (len(colors) > 0 and
+                    isinstance(colors[0], (list, tuple, np.ndarray))):
+                # Point-wise colors for each series
+                plot_colors = list(colors)
+                # Pad with None if not enough color arrays
+                while len(plot_colors) < self.n_plots:
+                    plot_colors.append(None)
+                return plot_colors
+            else:
+                # Check if this is point-wise colors for a single series
+                # (list of color strings matching data length)
+                if (self.n_plots == 1 and len(colors) > 0 and
+                        isinstance(colors[0], str) and
+                        len(colors) == len(self.x_data[0])):
+                    # Point-wise colors for single series
+                    return [list(colors)]
+                # Series-level colors
+                elif self.gradient and len(colors) >= 2:
+                    # Use gradient interpolation
+                    return interpolate_colors(list(colors), self.n_plots)
+                else:
+                    # Use colors as discrete values
+                    plot_colors = list(colors)
+                    if len(plot_colors) < self.n_plots:
+                        # Cycle through colors
+                        color_cycle = cycle(plot_colors)
+                        plot_colors = [
+                            next(color_cycle) for _ in range(self.n_plots)
+                        ]
+                    return plot_colors
+        else:
+            return get_plot_colors(self.palette, self.n_plots)
+
+    def _process_sizes(
+        self,
+        sizes: float | np.ndarray | list | None
+    ) -> list:
+        """
+        Process sizes into appropriate format for each plot.
+
+        Parameters
+        ----------
+        sizes : float, array-like, list, or None
+            Input sizes.
+
+        Returns
+        -------
+        list
+            List of sizes for each series (can be single values or
+            arrays for point-wise sizing).
+        """
+        if sizes is None:
+            return [10] * self.n_plots
+        elif isinstance(sizes, (int, float)):
+            return [sizes] * self.n_plots
+        elif isinstance(sizes, np.ndarray):
+            # Single array of sizes
+            if self.n_plots == 1:
+                return [sizes]
+            else:
+                return [sizes] + [10] * (self.n_plots - 1)
+        elif isinstance(sizes, (list, tuple)):
+            # Check if it's point-wise sizes (list of arrays)
+            if (len(sizes) > 0 and
+                    isinstance(sizes[0], (list, tuple, np.ndarray))):
+                # Point-wise sizes for each series
+                plot_sizes = [np.asarray(s) for s in sizes]
+                # Pad with default if not enough
+                while len(plot_sizes) < self.n_plots:
+                    plot_sizes.append(10)
+                return plot_sizes
+            else:
+                # Could be a single array as list
+                if self.n_plots == 1:
+                    return [np.asarray(sizes)]
+                else:
+                    return [np.asarray(sizes)] + [10] * (self.n_plots - 1)
+        else:
+            return [10] * self.n_plots
+
+    def _process_markers(
+        self,
+        marker: str | list[str]
+    ) -> list[str]:
+        """
+        Process markers into a list matching the number of plots.
+
+        Parameters
+        ----------
+        marker : str or list of str
+            Input marker symbol(s).
+
+        Returns
+        -------
+        List[str]
+            List of marker symbols, one per plot.
+        """
+        if isinstance(marker, str):
+            return [marker] * self.n_plots
+        elif isinstance(marker, (list, tuple)):
+            markers = list(marker)
+            if len(markers) < self.n_plots:
+                # Cycle through markers
+                marker_cycle = cycle(markers)
+                markers = [next(marker_cycle) for _ in range(self.n_plots)]
+            return markers
+        else:
+            return ['circle'] * self.n_plots
+
+    def _process_opacities(
+        self,
+        opacity: float | list[float]
+    ) -> list[float]:
+        """
+        Process opacity values into a list matching the number of plots.
+
+        Parameters
+        ----------
+        opacity : float or list of float
+            Input opacity value(s).
+
+        Returns
+        -------
+        List[float]
+            List of opacity values, one per plot.
+        """
+        if isinstance(opacity, (int, float)):
+            return [opacity] * self.n_plots
+        elif isinstance(opacity, (list, tuple)):
+            opacities = list(opacity)
+            if len(opacities) < self.n_plots:
+                # Cycle through opacities
+                opacity_cycle = cycle(opacities)
+                opacities = [
+                    next(opacity_cycle) for _ in range(self.n_plots)
+                ]
+            return opacities
+        else:
+            return [0.7] * self.n_plots
+
+    def _render(self) -> None:
+        """Render the interactive scatter plot."""
+        try:
+            import plotly.graph_objects as go
+        except ImportError as exc:
+            raise ImportError(
+                "Plotly is not installed. "
+                "Install it with: pip install plotly"
+            ) from exc
+
+        # Create figure
+        self.figure = self._create_figure()
+
+        # Add scatter traces for each series
+        for i in range(self.n_plots):
+            # Prepare trace parameters
+            trace_params = {
+                'x': self.x_data[i],
+                'y': self.y_data[i],
+                'mode': 'markers',
+                'name': self.plot_labels[i],
+                'marker': {
+                    'symbol': self.plot_markers[i],
+                    'size': self.plot_sizes[i],
+                    'opacity': self.plot_opacities[i],
+                }
+            }
+
+            # Handle colors (point-wise or series-level)
+            if isinstance(self.plot_colors[i], (list, np.ndarray)):
+                # Point-wise colors
+                trace_params['marker']['color'] = self.plot_colors[i]
+            else:
+                # Single color for the series
+                trace_params['marker']['color'] = self.plot_colors[i]
+
+            # Add trace
+            self.figure.add_trace(go.Scatter(**trace_params))
+
+        # Apply layout and styling
+        self._style_layout()
+
+    def _style_layout(self) -> None:
+        """Apply styling to the figure layout."""
+        # Get colors from palette
+        text_color = (
+            str(self.palette.colours['text_primary'])
+            if self.palette and 'text_primary' in self.palette.colours
+            else 'black'
+        )
+        neutral_color = (
+            str(self.palette.colours['neutral_light'])
+            if self.palette and 'neutral_light' in self.palette.colours
+            else 'white'
+        )
+        axes_border_color = (
+            str(self.palette.colours['neutral_dark'])
+            if self.palette and 'neutral_dark' in self.palette.colours
+            else 'black'
+        )
+        grid_color = (
+            str(self.palette.neutral_dark.lighten(20))
+            if self.palette and hasattr(self.palette, 'neutral_dark')
+            else 'lightgray'
+        )
+
+        # Update layout
+        layout_params = {
+            'title': {
+                'text': self.title,
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': {'color': text_color}
+            },
+            'xaxis': {
+                'title': self.xlabel,
+                'gridcolor': grid_color,
+                'linecolor': axes_border_color,
+                'color': text_color
+            },
+            'yaxis': {
+                'title': self.ylabel,
+                'gridcolor': grid_color,
+                'linecolor': axes_border_color,
+                'color': text_color
+            },
+            'plot_bgcolor': neutral_color,
+            'paper_bgcolor': neutral_color,
+            'width': self.figsize[0],
+            'height': self.figsize[1],
+            'showlegend': self.show_legend,
+            'legend': {
+                'bgcolor': neutral_color,
+                'bordercolor': axes_border_color,
+                'borderwidth': 1,
+                'font': {'color': text_color}
+            }
+        }
+
+        self.figure.update_layout(**layout_params)
+
+        # Apply typography if available
+        self._apply_typography()

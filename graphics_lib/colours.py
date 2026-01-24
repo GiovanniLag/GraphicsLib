@@ -7,7 +7,6 @@ from matplotlib import cm
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import Normalize
-import seaborn as sns
 import re
 
 

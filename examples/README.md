@@ -30,6 +30,31 @@ Run with:
 python examples/custom_palette.py
 ```
 
+### `scatter_demo.py`
+Quick demonstration of ScatterPlot with different point colors:
+- Creating scatter plots with point-wise color control
+- Coloring points based on data properties
+- Customizable marker sizes and edge properties
+
+Run with:
+```bash
+python examples/scatter_demo.py
+```
+
+### `scatter_usage.py`
+Comprehensive examples of ScatterPlot functionality:
+- Uniform colors for all points
+- Different colors per point
+- Multiple scatter series with gradient
+- Varying point sizes (bubble plots)
+- Categorical colors
+- Different markers for different series
+
+Run with:
+```bash
+python examples/scatter_usage.py
+```
+
 ## Output
 
 The example scripts will generate several image files demonstrating different plot types and styling options:
@@ -40,3 +65,10 @@ The example scripts will generate several image files demonstrating different pl
 - `custom_style_plot.png` - Plot with custom palette and typography
 - `ocean_palette.png` - Visualization of custom palette
 - `ocean_palette.json` - Saved palette data
+- `scatter_demo.png` - Scatter plot with distance-based coloring
+- `scatter_uniform.png` - Scatter plot with uniform colors
+- `scatter_point_colors.png` - Scatter plot with point-wise colors
+- `scatter_multiple_series.png` - Multiple scatter series
+- `scatter_variable_sizes.png` - Scatter plot with varying sizes
+- `scatter_categorical.png` - Scatter plot with categorical colors
+- `scatter_different_markers.png` - Scatter plot with different markers
