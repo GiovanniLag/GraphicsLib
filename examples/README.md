@@ -105,6 +105,24 @@ from graphics_lib.plots.plotly import DashScatterPlot
 plot.show()  # Automatically displays inline
 ```
 
+### `dash_scatter_with_plots.py`
+**NEW!** Using actual plot objects from the library as detail views:
+- Matplotlib LinePlot objects as details
+- Matplotlib FitPlot objects with residuals
+- Direct Plotly Figure objects (including 3D plots)
+- Mixed approach with different plot types per point
+- Demonstrates automatic matplotlib-to-plotly conversion
+
+**Requirements:**
+```bash
+pip install graphics-lib[dash]
+```
+
+Run with:
+```bash
+python examples/dash_scatter_with_plots.py
+```
+
 ## Output
 
 The example scripts will generate several image files demonstrating different plot types and styling options:

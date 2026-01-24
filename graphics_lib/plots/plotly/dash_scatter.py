@@ -92,6 +92,156 @@ class DashScatterPlot(ScatterPlot):
             return str(self.palette.primary)
         return str(self.palette.colours.get(color_key, fallback))
 
+    def _convert_to_plotly_figure(self, plot_data, index):
+        """Convert various plot formats to Plotly figure.
+        
+        Parameters
+        ----------
+        plot_data : dict, plotly.graph_objects.Figure, matplotlib.figure.Figure,
+                    or BasePlot
+            The plot data or figure object.
+        index : int
+            The point index for default titles.
+        
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            A Plotly figure ready to display.
+        """
+        import plotly.graph_objects as go
+        
+        # Check if it's already a Plotly figure
+        if isinstance(plot_data, go.Figure):
+            return plot_data
+        
+        # Check if it's a BasePlot object from our library FIRST
+        # (before checking for matplotlib figure, since plot objects contain figures)
+        try:
+            from graphics_lib.core.base import BasePlot
+            from graphics_lib.backends.matplotlib import MatplotlibPlot
+            from graphics_lib.backends.plotly import PlotlyPlot
+            
+            if isinstance(plot_data, BasePlot):
+                # For matplotlib-based plots, render and get the figure
+                if isinstance(plot_data, MatplotlibPlot):
+                    # Render the plot if not already rendered
+                    if plot_data.fig is None:
+                        plot_data.render()
+                    
+                    if plot_data.fig is not None:
+                        return self._matplotlib_to_plotly(plot_data.fig)
+                
+                # For plotly-based plots, get the figure directly
+                elif isinstance(plot_data, PlotlyPlot):
+                    if hasattr(plot_data, 'figure') and plot_data.figure is not None:
+                        return plot_data.figure
+                    # Render if needed
+                    plot_data.render()
+                    if hasattr(plot_data, 'figure'):
+                        return plot_data.figure
+        except (ImportError, AttributeError):
+            pass
+        
+        # Check if it's a raw matplotlib figure
+        try:
+            from matplotlib.figure import Figure as MatplotlibFigure
+            if isinstance(plot_data, MatplotlibFigure):
+                return self._matplotlib_to_plotly(plot_data)
+        except ImportError:
+            pass
+        
+        # Check if it's a dict with a 'figure' key
+        if isinstance(plot_data, dict) and 'figure' in plot_data:
+            # Dict contains a figure object
+            return self._convert_to_plotly_figure(plot_data['figure'], index)
+        
+        # Check if it's a dict with x/y data
+        if isinstance(plot_data, dict):
+            return self._create_detail_figure(index, plot_data)
+        
+        # Fallback: create empty figure with error message
+        empty_fig = go.Figure()
+        empty_fig.update_layout(
+            title=f'Unsupported plot type: {type(plot_data).__name__}',
+            annotations=[{
+                'text': 'Unable to display this plot type',
+                'xref': 'paper',
+                'yref': 'paper',
+                'showarrow': False,
+                'font': {'size': 20}
+            }]
+        )
+        return empty_fig
+    
+    def _matplotlib_to_plotly(self, mpl_fig):
+        """Convert matplotlib figure to Plotly figure using image encoding.
+        
+        Parameters
+        ----------
+        mpl_fig : matplotlib.figure.Figure
+            The matplotlib figure to convert.
+        
+        Returns
+        -------
+        plotly.graph_objects.Figure
+            A Plotly figure displaying the matplotlib plot as an image.
+        """
+        import plotly.graph_objects as go
+        import io
+        import base64
+        
+        # Save matplotlib figure to bytes
+        buf = io.BytesIO()
+        mpl_fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        
+        # Encode to base64
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+        
+        # Create plotly figure with image
+        fig = go.Figure()
+        
+        # Add invisible scatter to set up axes
+        fig.add_trace(go.Scatter(
+            x=[0, 1],
+            y=[0, 1],
+            mode='markers',
+            marker={'opacity': 0},
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        # Add image
+        fig.add_layout_image(
+            dict(
+                source=f'data:image/png;base64,{img_base64}',
+                xref="x",
+                yref="y",
+                x=0,
+                y=1,
+                sizex=1,
+                sizey=1,
+                sizing="stretch",
+                layer="above"
+            )
+        )
+        
+        # Configure layout
+        fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False, range=[0, 1])
+        fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False, range=[0, 1])
+        fig.update_layout(
+            width=self.detail_figsize[0],
+            height=self.detail_figsize[1],
+            margin={'l': 0, 'r': 0, 't': 0, 'b': 0},
+            xaxis={'visible': False},
+            yaxis={'visible': False},
+            plot_bgcolor='white',
+            paper_bgcolor='white'
+        )
+        
+        return fig
+
     def _create_detail_figure(self, index, plot_data):
         import plotly.graph_objects as go
         x_data = plot_data.get('x', [])
@@ -160,7 +310,7 @@ class DashScatterPlot(ScatterPlot):
                 empty_fig = go.Figure()
                 empty_fig.update_layout(title='No data available')
                 return empty_fig, f'Point {point_index}: No detail data available'
-            detail_fig = self._create_detail_figure(point_index, plot_data)
+            detail_fig = self._convert_to_plotly_figure(plot_data, point_index)
             return detail_fig, f'Showing details for Point {point_index}'
 
     def run(self, debug=False, height=650):

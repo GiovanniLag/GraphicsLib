@@ -187,6 +187,41 @@ plot.show()  # Opens Dash app (browser or Jupyter inline)
 - Works in both standalone Python scripts and Jupyter notebooks
 - Automatically detects environment and uses appropriate display mode
 
+### Using Plot Objects as Details
+
+You can use **any plot from the library** (matplotlib or plotly) as detail views:
+
+```python
+from graphics_lib.plots.matplotlib.line import LinePlot
+from graphics_lib.plots.matplotlib.fit import FitPlot
+
+def create_detail_plot(index):
+    """Return a matplotlib LinePlot object."""
+    t = np.linspace(0, 2 * np.pi, 100)
+    signal = np.sin((1 + index * 0.1) * t)
+    
+    return LinePlot(
+        x=t,
+        y=signal,
+        title=f'Time Series {index}',
+        palette='qscience'
+    )
+
+plot = DashScatterPlot(
+    x, y,
+    detail_plot_data=create_detail_plot,  # Returns plot objects
+    title='Click to See Matplotlib Plots',
+    palette='qscience'
+)
+```
+
+**Supported detail types:**
+- `dict` with 'x'/'y' data - Creates simple plotly plot
+- `plotly.graph_objects.Figure` - Uses plotly figure directly
+- `matplotlib.figure.Figure` - Converts to plotly automatically  
+- `LinePlot`, `FitPlot`, or any `BasePlot` - Extracts and converts figure
+- `dict` with 'figure' key - Extracts figure from dict
+
 ### Alternative Data Structures
 
 **Dictionary (Sparse Data):**
