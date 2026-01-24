@@ -55,6 +55,56 @@ Run with:
 python examples/scatter_usage.py
 ```
 
+### `plotly_scatter_basic.py`
+Basic Plotly interactive scatter plot examples:
+- Single scatter plot with uniform colors
+- Point-wise color control
+- Multiple scatter series with different markers
+- Interactive features (zoom, pan, hover)
+
+Run with:
+```bash
+python examples/plotly_scatter_basic.py
+```
+
+### `plotly_scatter_demo.py`
+Advanced Plotly scatter plot demonstrations:
+- Point-wise colors and sizes
+- Multiple series with gradients
+- Categorical data visualization
+- Complex styling options
+
+Run with:
+```bash
+python examples/plotly_scatter_demo.py
+```
+
+### `dash_scatter_demo.py`
+**NEW!** Advanced interactive scatter plots with click-triggered detail plots:
+- List data structure (all points have details)
+- Dictionary data structure (sparse detail data)
+- Callable data structure (dynamic generation)
+- Multiple series with different detail plot types
+- Works in both browser and Jupyter notebooks
+- Auto-detects environment and uses appropriate display mode
+
+**Requirements:**
+```bash
+pip install graphics-lib[dash]
+```
+
+Run with:
+```bash
+python examples/dash_scatter_demo.py
+```
+
+For Jupyter notebooks:
+```python
+from graphics_lib.plots.plotly import DashScatterPlot
+# ... create plot ...
+plot.show()  # Automatically displays inline
+```
+
 ## Output
 
 The example scripts will generate several image files demonstrating different plot types and styling options:
