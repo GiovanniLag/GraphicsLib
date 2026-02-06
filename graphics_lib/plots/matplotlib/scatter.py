@@ -89,6 +89,10 @@ class ScatterPlot(MatplotlibPlot):
         If True, interpolates between the colors in the 'colors' list
         to create a gradient across all series. If False, colors are
         used as discrete values. Default is False.
+    ax : Axes, optional
+        Matplotlib axes object to draw the plot on. If provided, the plot
+        will be drawn on this axes instead of creating a new figure.
+        Default is None.
     **kwargs
         Additional keyword arguments for plot customization.
 
@@ -185,6 +189,7 @@ class ScatterPlot(MatplotlibPlot):
         edgecolors: str | list[str] | None = None,
         linewidths: float | list[float] = 1.0,
         gradient: bool = False,
+        ax: Axes | None = None,
         **kwargs
     ) -> None:
         """Initialize the scatter plot and render it."""
@@ -201,6 +206,7 @@ class ScatterPlot(MatplotlibPlot):
         self.ylabel = ylabel
         self.grid_enabled = grid
         self.gradient = gradient
+        self.external_ax = ax
 
         # Process data into lists for consistent handling
         self.x_data, self.y_data = self._normalize_data(x, y)
@@ -528,9 +534,14 @@ class ScatterPlot(MatplotlibPlot):
 
     def _render(self) -> None:
         """Render the scatter plot."""
-        # Create figure and axes
-        self.fig, ax = self._create_figure()
-        self.axes = ax
+        # Create figure and axes or use provided axes
+        if self.external_ax is not None:
+            ax = self.external_ax
+            self.fig = ax.get_figure()
+            self.axes = ax
+        else:
+            self.fig, ax = self._create_figure()
+            self.axes = ax
 
         # Plot all datasets
         for i in range(self.n_plots):
@@ -648,5 +659,6 @@ class ScatterPlot(MatplotlibPlot):
                 **legend_kwargs
             )
 
-        # Use tight layout
-        self.fig.tight_layout()
+        # Use tight layout only if not using external axes
+        if self.external_ax is None:
+            self.fig.tight_layout()

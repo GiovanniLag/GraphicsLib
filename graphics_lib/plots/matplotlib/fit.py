@@ -63,6 +63,10 @@ class FitPlot(MatplotlibPlot):
     rasterize_points : bool, optional
         Whether to rasterize the scatter points for better performance
         with large datasets. Default is False.
+    ax : Axes, optional
+        Matplotlib axes object to draw the plot on. If provided, the plot
+        will be drawn on this axes instead of creating a new figure.
+        Cannot be used together with show_residuals=True. Default is None.
     **kwargs
         Additional keyword arguments for customization.
 
@@ -117,9 +121,18 @@ class FitPlot(MatplotlibPlot):
         show_residuals: bool = True,
         figsize: tuple = (10, 8),
         rasterize_points: bool = False,
+        ax: Axes | None = None,
         **kwargs
     ) -> None:
         """Initialize the fit plot and render it."""
+        # Validate parameters
+        if ax is not None and show_residuals:
+            raise ValueError(
+                "Cannot use external axes (ax) together with "
+                "show_residuals=True. Please set show_residuals=False "
+                "when providing an axes object."
+            )
+        
         super().__init__(
             title=title,
             palette=palette,
@@ -129,6 +142,7 @@ class FitPlot(MatplotlibPlot):
         )
 
         # Store plot-specific attributes
+        self.external_ax = ax
         self.data = self._process_data(data)
         self.model = model
         self.model_params = model_params
@@ -180,8 +194,13 @@ class FitPlot(MatplotlibPlot):
 
     def _render(self) -> None:
         """Render the fit plot with data, model, and optionally residuals."""
-        # Create figure and axes
-        if self.show_residuals:
+        # Create figure and axes or use provided axes
+        if self.external_ax is not None:
+            ax_main = self.external_ax
+            self.fig = ax_main.get_figure()
+            ax_residuals = None
+            self.axes = ax_main
+        elif self.show_residuals:
             self.fig, (ax_main, ax_residuals) = self._create_figure(
                 nrows=2,
                 ncols=1,
@@ -257,6 +276,10 @@ class FitPlot(MatplotlibPlot):
             # Share x-axis with main plot
             ax_main.sharex(ax_residuals)
             ax_main.tick_params(labelbottom=False)
+        
+        # Use tight layout only if not using external axes
+        if self.external_ax is None and hasattr(self.fig, 'tight_layout'):
+            self.fig.tight_layout()
 
     def _style_axes(
         self,
