@@ -39,6 +39,16 @@ class FitPlot(MatplotlibPlot):
     model_params : dict
         Parameters for the model function. Should match the model's
         expected parameters.
+    error : np.ndarray, dict, or None, optional
+        Error values for the data points. Accepted formats:
+
+        - 1D array: Interpreted as x-direction errors.
+        - 2D array of shape ``(2, n)``: First row is x errors,
+          second row is y errors.
+        - dict with optional ``'x'`` and/or ``'y'`` keys, each
+          mapping to an array of error values.
+
+        Default is None (no error bars).
     title : str, optional
         The title of the plot. Default is 'Model Fit'.
     palette : Union[str, Palette, None], optional
@@ -78,6 +88,10 @@ class FitPlot(MatplotlibPlot):
         The model function.
     model_params : dict
         The model parameters.
+    xerr : np.ndarray or None
+        X-direction error values, or None if not provided.
+    yerr : np.ndarray or None
+        Y-direction error values, or None if not provided.
     residuals : np.ndarray
         The calculated residuals (y_data - y_model).
 
@@ -104,6 +118,17 @@ class FitPlot(MatplotlibPlot):
     ...     title='Exponential Decay'
     ... )
     >>> plot.show()
+    >>>
+    >>> # With error bars
+    >>> yerr = np.random.uniform(0.05, 0.2, 100)
+    >>> plot = FitPlot(
+    ...     data=data,
+    ...     model=exp_model,
+    ...     model_params={'amplitude': 3, 'tau': 2},
+    ...     error={'y': yerr},
+    ...     palette='qscience',
+    ...     title='Fit with Error Bars'
+    ... )
     """
 
     def __init__(
@@ -111,6 +136,7 @@ class FitPlot(MatplotlibPlot):
         data: dict | np.ndarray,
         model: Callable,
         model_params: dict[str, Any],
+        error: np.ndarray | dict | None = None,
         title: str = 'Model Fit',
         palette: str | 'Palette' | None = None,
         typography: str | 'Typography' | None = None,
@@ -154,6 +180,11 @@ class FitPlot(MatplotlibPlot):
         self.rasterize_points = rasterize_points
         self.residuals: np.ndarray | None = None
 
+        # Process error bars
+        processed_error = self._process_error(error)
+        self.xerr = processed_error['x']
+        self.yerr = processed_error['y']
+
         # Render the plot
         self._render()
 
@@ -191,6 +222,67 @@ class FitPlot(MatplotlibPlot):
                     'x': np.arange(len(data_array)),
                     'y': data_array
                 }
+
+    def _process_error(
+        self,
+        error: np.ndarray | dict | None
+    ) -> dict[str, np.ndarray | None]:
+        """
+        Process error input into standard format.
+
+        Parameters
+        ----------
+        error : np.ndarray, dict, or None
+            Error values for the data points. Can be:
+
+            - None: No error bars.
+            - 1D array: Interpreted as x-direction errors.
+            - 2D array of shape ``(2, n)``: First row is x errors,
+              second row is y errors.
+            - dict: With optional ``'x'`` and/or ``'y'`` keys
+              containing error arrays.
+
+        Returns
+        -------
+        dict
+            Dictionary with ``'x'`` and ``'y'`` keys, each
+            containing a numpy array or None.
+
+        Raises
+        ------
+        ValueError
+            If the error array has more than 2 dimensions.
+        """
+        if error is None:
+            return {'x': None, 'y': None}
+
+        if isinstance(error, dict):
+            return {
+                'x': (
+                    np.asarray(error['x'])
+                    if 'x' in error
+                    else None
+                ),
+                'y': (
+                    np.asarray(error['y'])
+                    if 'y' in error
+                    else None
+                ),
+            }
+
+        error_array = np.asarray(error)
+        if error_array.ndim == 1:
+            return {'x': error_array, 'y': None}
+        elif error_array.ndim == 2:
+            return {
+                'x': error_array[0],
+                'y': error_array[1]
+            }
+        else:
+            raise ValueError(
+                "Error array must be 1D or 2D, "
+                f"got {error_array.ndim}D."
+            )
 
     def _render(self) -> None:
         """Render the fit plot with data, model, and optionally residuals."""
@@ -233,19 +325,42 @@ class FitPlot(MatplotlibPlot):
             else '#0d5a87'
         )
 
-        # Plot data points
-        ax_main.scatter(
-            x_data,
-            y_data,
-            color=scatter_color,
-            alpha=0.3,
-            s=30,
-            label=self.data_label,
-            zorder=2,
-            edgecolors=str(edge_color),
-            linewidth=0.8,
-            rasterized=self.rasterize_points
-        )
+        # Plot data points (with error bars if provided)
+        if self.xerr is not None or self.yerr is not None:
+            container = ax_main.errorbar(
+                x_data,
+                y_data,
+                xerr=self.xerr,
+                yerr=self.yerr,
+                fmt='o',
+                color=scatter_color,
+                ecolor=str(edge_color),
+                elinewidth=0.8,
+                capsize=3,
+                capthick=0.8,
+                markersize=5.5,
+                markeredgecolor=str(edge_color),
+                markeredgewidth=0.8,
+                alpha=0.3,
+                label=self.data_label,
+                zorder=2,
+            )
+            if self.rasterize_points:
+                for child in container.get_children():
+                    child.set_rasterized(True)
+        else:
+            ax_main.scatter(
+                x_data,
+                y_data,
+                color=scatter_color,
+                alpha=0.3,
+                s=30,
+                label=self.data_label,
+                zorder=2,
+                edgecolors=str(edge_color),
+                linewidth=0.8,
+                rasterized=self.rasterize_points
+            )
 
         # Generate smooth model curve
         x_fit = np.linspace(x_data.min(), x_data.max(), 300)
@@ -439,17 +554,38 @@ class FitPlot(MatplotlibPlot):
             else 'gray'
         )
 
-        # Plot residuals
-        ax.scatter(
-            x_data,
-            self.residuals,
-            color=scatter_color,
-            alpha=0.3,
-            s=30,
-            edgecolors=str(edge_color),
-            linewidth=0.7,
-            rasterized=self.rasterize_points
-        )
+        # Plot residuals (with y error bars if provided)
+        if self.yerr is not None:
+            container = ax.errorbar(
+                x_data,
+                self.residuals,
+                yerr=self.yerr,
+                fmt='o',
+                color=scatter_color,
+                ecolor=str(edge_color),
+                elinewidth=0.8,
+                capsize=3,
+                capthick=0.8,
+                markersize=5.5,
+                markeredgecolor=str(edge_color),
+                markeredgewidth=0.8,
+                alpha=0.3,
+                zorder=2,
+            )
+            if self.rasterize_points:
+                for child in container.get_children():
+                    child.set_rasterized(True)
+        else:
+            ax.scatter(
+                x_data,
+                self.residuals,
+                color=scatter_color,
+                alpha=0.3,
+                s=30,
+                edgecolors=str(edge_color),
+                linewidth=0.7,
+                rasterized=self.rasterize_points
+            )
 
         # Add zero line
         ax.axhline(

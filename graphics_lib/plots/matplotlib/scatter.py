@@ -85,6 +85,24 @@ class ScatterPlot(MatplotlibPlot):
         Edge colors for the markers. Default is None.
     linewidths : float or list of float, optional
         Width(s) of marker edges. Default is 1.0.
+    error : dict, np.ndarray, list, or None, optional
+        Error bar specification for the scatter points. Accepts
+        several formats:
+
+        - None: No error bars on any series.
+        - A dict with ``'x'`` and/or ``'y'`` keys containing arrays:
+          applied to every series (or the single series).
+        - A 1D array: Interpreted as x-direction errors for a
+          single series.
+        - A 2D array of shape ``(2, n)``: First row is x errors,
+          second row is y errors, for a single series.
+        - A list of the above: Per-series error specs. Each element
+          can be None (plain scatter), a dict, a 1D array, or a 2D
+          array. Length should match the number of series; shorter
+          lists are padded with None.
+
+        When error bars are active for a series, ``ax.errorbar`` is
+        used instead of ``ax.scatter``. Default is None.
     gradient : bool, optional
         If True, interpolates between the colors in the 'colors' list
         to create a gradient across all series. If False, colors are
@@ -114,6 +132,9 @@ class ScatterPlot(MatplotlibPlot):
         Marker styles for each scatter series.
     plot_alphas : list
         Transparency values for each scatter series.
+    plot_errors : list of dict
+        Per-series error specs. Each element is a dict with ``'x'``
+        and ``'y'`` keys (values are arrays or None).
 
     Examples
     --------
@@ -166,6 +187,16 @@ class ScatterPlot(MatplotlibPlot):
     ...     alpha=0.5
     ... )
     >>> plot.show()
+    >>>
+    >>> # Scatter with error bars on selected series
+    >>> x = [np.arange(10), np.arange(10)]
+    >>> y = [np.random.rand(10), np.random.rand(10)]
+    >>> plot = ScatterPlot(
+    ...     x, y,
+    ...     labels=['With errors', 'Plain'],
+    ...     error=[{'y': np.random.rand(10) * 0.1}, None],
+    ... )
+    >>> plot.show()
     """
 
     def __init__(
@@ -188,6 +219,7 @@ class ScatterPlot(MatplotlibPlot):
         alpha: float | list[float] = 0.7,
         edgecolors: str | list[str] | None = None,
         linewidths: float | list[float] = 1.0,
+        error: np.ndarray | dict | list | None = None,
         gradient: bool = False,
         ax: Axes | None = None,
         **kwargs
@@ -220,6 +252,7 @@ class ScatterPlot(MatplotlibPlot):
         self.plot_alphas = self._process_alphas(alpha)
         self.plot_edgecolors = self._process_edgecolors(edgecolors)
         self.plot_linewidths = self._process_linewidths(linewidths)
+        self.plot_errors = self._process_errors(error)
 
         # Render the plot
         self._render()
@@ -532,6 +565,117 @@ class ScatterPlot(MatplotlibPlot):
         else:
             return [1.0] * self.n_plots
 
+    def _process_errors(
+        self,
+        error: np.ndarray | dict | list | None
+    ) -> list[dict[str, np.ndarray | None]]:
+        """
+        Process error input into per-series standard format.
+
+        Parameters
+        ----------
+        error : np.ndarray, dict, list, or None
+            Error bar specification. Accepted formats:
+
+            - None: No error bars on any series.
+            - dict with ``'x'`` and/or ``'y'`` keys: Applied to
+              every series.
+            - 1D array: X-direction errors for a single series.
+            - 2D array ``(2, n)``: Row 0 = x errors,
+              row 1 = y errors, for a single series.
+            - list of the above: Per-series specs. Each element
+              can be None, a dict, a 1D array or a 2D array.
+
+        Returns
+        -------
+        list of dict
+            One dict per series with ``'x'`` and ``'y'`` keys
+            (values are numpy arrays or None).
+
+        Raises
+        ------
+        ValueError
+            If an error array has more than 2 dimensions.
+        """
+        no_error: dict[str, np.ndarray | None] = {
+            'x': None, 'y': None
+        }
+
+        if error is None:
+            return [dict(no_error) for _ in range(self.n_plots)]
+
+        # ----------------------------------------------------------
+        # Helper: convert a single spec into a normalised dict
+        # ----------------------------------------------------------
+        def _normalise_single(
+            spec: np.ndarray | dict | None,
+        ) -> dict[str, np.ndarray | None]:
+            """Convert one error spec to {'x': ..., 'y': ...}."""
+            if spec is None:
+                return dict(no_error)
+            if isinstance(spec, dict):
+                return {
+                    'x': (
+                        np.asarray(spec['x'])
+                        if 'x' in spec
+                        else None
+                    ),
+                    'y': (
+                        np.asarray(spec['y'])
+                        if 'y' in spec
+                        else None
+                    ),
+                }
+            arr = np.asarray(spec)
+            if arr.ndim == 1:
+                return {'x': arr, 'y': None}
+            elif arr.ndim == 2:
+                return {'x': arr[0], 'y': arr[1]}
+            else:
+                raise ValueError(
+                    "Error array must be 1D or 2D, "
+                    f"got {arr.ndim}D."
+                )
+
+        # ----------------------------------------------------------
+        # Detect whether *error* is a per-series list
+        # ----------------------------------------------------------
+        if isinstance(error, list):
+            # Heuristic: if every element is None, a dict, or an
+            # ndarray/list whose first element is also a sequence,
+            # treat it as a per-series list. The simplest reliable
+            # check: if any element is None or dict, it must be a
+            # per-series list.
+            is_per_series = any(
+                item is None or isinstance(item, dict)
+                for item in error
+            )
+            if not is_per_series:
+                # Could still be per-series (list of arrays). Check
+                # if length matches n_plots and each element looks
+                # like an array whose length matches the data.
+                if len(error) == self.n_plots:
+                    is_per_series = all(
+                        hasattr(item, '__len__')
+                        and len(item) == len(self.x_data[idx])
+                        for idx, item in enumerate(error)
+                    )
+
+            if is_per_series:
+                result = [
+                    _normalise_single(item) for item in error
+                ]
+                # Pad with no-error if shorter than n_plots
+                while len(result) < self.n_plots:
+                    result.append(dict(no_error))
+                return result
+
+        # ----------------------------------------------------------
+        # Single spec – broadcast to all series
+        # ----------------------------------------------------------
+        single = _normalise_single(error)
+        return [dict(single) for _ in range(self.n_plots)]
+
     def _render(self) -> None:
         """Render the scatter plot."""
         # Create figure and axes or use provided axes
@@ -545,17 +689,60 @@ class ScatterPlot(MatplotlibPlot):
 
         # Plot all datasets
         for i in range(self.n_plots):
-            ax.scatter(
-                self.x_data[i],
-                self.y_data[i],
-                c=self.plot_colors[i],
-                s=self.plot_sizes[i],
-                marker=self.plot_markers[i],
-                alpha=self.plot_alphas[i],
-                edgecolors=self.plot_edgecolors[i],
-                linewidths=self.plot_linewidths[i],
-                label=self.plot_labels[i]
-            )
+            xerr_i = self.plot_errors[i]['x']
+            yerr_i = self.plot_errors[i]['y']
+            has_errors = xerr_i is not None or yerr_i is not None
+
+            if has_errors:
+                # Use errorbar for this series
+                # Map scatter size to approximate marker size
+                size_val = self.plot_sizes[i]
+                if isinstance(size_val, (int, float)):
+                    msize = max(1.0, np.sqrt(size_val) / 2)
+                else:
+                    # Point-wise sizes: use median as marker size
+                    msize = max(
+                        1.0,
+                        np.sqrt(np.median(size_val)) / 2
+                    )
+
+                color_i = self.plot_colors[i]
+                edge_i = (
+                    self.plot_edgecolors[i]
+                    if self.plot_edgecolors[i] is not None
+                    else color_i
+                )
+
+                ax.errorbar(
+                    self.x_data[i],
+                    self.y_data[i],
+                    xerr=xerr_i,
+                    yerr=yerr_i,
+                    fmt=self.plot_markers[i],
+                    color=color_i,
+                    ecolor=edge_i,
+                    elinewidth=self.plot_linewidths[i],
+                    capsize=3,
+                    capthick=self.plot_linewidths[i],
+                    markersize=msize,
+                    markeredgecolor=edge_i,
+                    markeredgewidth=self.plot_linewidths[i],
+                    alpha=self.plot_alphas[i],
+                    label=self.plot_labels[i],
+                    zorder=2,
+                )
+            else:
+                ax.scatter(
+                    self.x_data[i],
+                    self.y_data[i],
+                    c=self.plot_colors[i],
+                    s=self.plot_sizes[i],
+                    marker=self.plot_markers[i],
+                    alpha=self.plot_alphas[i],
+                    edgecolors=self.plot_edgecolors[i],
+                    linewidths=self.plot_linewidths[i],
+                    label=self.plot_labels[i]
+                )
 
         # Apply styling
         self._style_axes(ax)

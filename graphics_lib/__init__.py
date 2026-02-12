@@ -12,7 +12,7 @@ from graphics_lib.colours import Colour, Palette, COLOURS, coolors_palette
 from graphics_lib.typography import Font, Typography
 
 # Plot classes
-from graphics_lib.plots.matplotlib import FitPlot, LinePlot
+from graphics_lib.plots.matplotlib import FitPlot, LinePlot, ScatterPlot
 
 # Registries for string shortcuts
 from graphics_lib.core.registry import (
@@ -154,6 +154,7 @@ __all__ = [
     # Plot classes
     'FitPlot',
     'LinePlot',
+    'ScatterPlot',
 
     # Registries
     'PaletteRegistry',
