@@ -78,10 +78,17 @@ class FitPlot(MatplotlibPlot):
         transparent) to 1 (fully opaque). Default is 0.3.
     xlim : tuple[float, float], optional
         The x-axis limits as (min, max). If None, matplotlib will
-        automatically determine the limits. Default is None.
+        automatically determine the limits. When set and
+        ``show_residuals=True``, the same limits are applied to both
+        the main and residuals axes. Default is None.
     ylim : tuple[float, float], optional
         The y-axis limits as (min, max). If None, matplotlib will
         automatically determine the limits. Default is None.
+    fit_x_range : tuple[float, float], optional
+        The x-range ``(min, max)`` over which to evaluate the model
+        curve. If None and ``xlim`` is set, the fit range defaults
+        to ``xlim``. If both are None, the range of the input data
+        is used. Default is None.
     ax : Axes, optional
         Matplotlib axes object to draw the plot on. If provided, the plot
         will be drawn on this axes instead of creating a new figure.
@@ -103,6 +110,8 @@ class FitPlot(MatplotlibPlot):
         Y-direction error values, or None if not provided.
     residuals : np.ndarray
         The calculated residuals (y_data - y_model).
+    fit_x_range : tuple[float, float] or None
+        The effective x-range used for the model curve.
 
     Examples
     --------
@@ -159,6 +168,7 @@ class FitPlot(MatplotlibPlot):
         alpha: float = 0.3,
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
+        fit_x_range: tuple[float, float] | None = None,
         ax: Axes | None = None,
         **kwargs
     ) -> None:
@@ -193,6 +203,8 @@ class FitPlot(MatplotlibPlot):
         self.alpha = alpha
         self.xlim = xlim
         self.ylim = ylim
+        # Default fit_x_range to xlim when not explicitly provided
+        self.fit_x_range = fit_x_range if fit_x_range is not None else xlim
         self.residuals: np.ndarray | None = None
 
         # Process error bars
@@ -377,8 +389,18 @@ class FitPlot(MatplotlibPlot):
                 rasterized=self.rasterize_points
             )
 
-        # Generate smooth model curve
-        x_fit = np.linspace(x_data.min(), x_data.max(), 300)
+        # Generate smooth model curve over the fit range
+        fit_lo = (
+            self.fit_x_range[0]
+            if self.fit_x_range is not None
+            else x_data.min()
+        )
+        fit_hi = (
+            self.fit_x_range[1]
+            if self.fit_x_range is not None
+            else x_data.max()
+        )
+        x_fit = np.linspace(fit_lo, fit_hi, 300)
         y_fit = self.model(x_fit, **self.model_params)
 
         # Plot model line
@@ -406,7 +428,12 @@ class FitPlot(MatplotlibPlot):
             # Share x-axis with main plot
             ax_main.sharex(ax_residuals)
             ax_main.tick_params(labelbottom=False)
-        
+
+            # Apply xlim to shared axes after sharex so both
+            # the main and residuals axes are affected
+            if self.xlim is not None:
+                ax_residuals.set_xlim(self.xlim)
+
         # Use tight layout only if not using external axes
         if self.external_ax is None and hasattr(self.fig, 'tight_layout'):
             self.fig.tight_layout()
