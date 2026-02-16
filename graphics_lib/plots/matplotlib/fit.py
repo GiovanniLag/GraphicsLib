@@ -73,6 +73,15 @@ class FitPlot(MatplotlibPlot):
     rasterize_points : bool, optional
         Whether to rasterize the scatter points for better performance
         with large datasets. Default is False.
+    alpha : float, optional
+        The transparency level for the data points, from 0 (fully
+        transparent) to 1 (fully opaque). Default is 0.3.
+    xlim : tuple[float, float], optional
+        The x-axis limits as (min, max). If None, matplotlib will
+        automatically determine the limits. Default is None.
+    ylim : tuple[float, float], optional
+        The y-axis limits as (min, max). If None, matplotlib will
+        automatically determine the limits. Default is None.
     ax : Axes, optional
         Matplotlib axes object to draw the plot on. If provided, the plot
         will be drawn on this axes instead of creating a new figure.
@@ -147,6 +156,9 @@ class FitPlot(MatplotlibPlot):
         show_residuals: bool = True,
         figsize: tuple = (10, 8),
         rasterize_points: bool = False,
+        alpha: float = 0.3,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
         ax: Axes | None = None,
         **kwargs
     ) -> None:
@@ -178,6 +190,9 @@ class FitPlot(MatplotlibPlot):
         self.model_label = model_label
         self.show_residuals = show_residuals
         self.rasterize_points = rasterize_points
+        self.alpha = alpha
+        self.xlim = xlim
+        self.ylim = ylim
         self.residuals: np.ndarray | None = None
 
         # Process error bars
@@ -341,7 +356,7 @@ class FitPlot(MatplotlibPlot):
                 markersize=5.5,
                 markeredgecolor=str(edge_color),
                 markeredgewidth=0.8,
-                alpha=0.3,
+                alpha=self.alpha,
                 label=self.data_label,
                 zorder=2,
             )
@@ -353,7 +368,7 @@ class FitPlot(MatplotlibPlot):
                 x_data,
                 y_data,
                 color=scatter_color,
-                alpha=0.3,
+                alpha=self.alpha,
                 s=30,
                 label=self.data_label,
                 zorder=2,
@@ -502,6 +517,12 @@ class FitPlot(MatplotlibPlot):
             labelcolor=text_color
         )
 
+        # Apply axis limits if provided
+        if self.xlim is not None:
+            ax.set_xlim(self.xlim)
+        if self.ylim is not None:
+            ax.set_ylim(self.ylim)
+
     def _plot_residuals(
         self,
         ax: Axes,
@@ -569,7 +590,7 @@ class FitPlot(MatplotlibPlot):
                 markersize=5.5,
                 markeredgecolor=str(edge_color),
                 markeredgewidth=0.8,
-                alpha=0.3,
+                alpha=self.alpha,
                 zorder=2,
             )
             if self.rasterize_points:
@@ -580,7 +601,7 @@ class FitPlot(MatplotlibPlot):
                 x_data,
                 self.residuals,
                 color=scatter_color,
-                alpha=0.3,
+                alpha=self.alpha,
                 s=30,
                 edgecolors=str(edge_color),
                 linewidth=0.7,

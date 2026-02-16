@@ -67,6 +67,12 @@ class LinePlot(MatplotlibPlot):
         If True, interpolates between the colors in the 'colors' list
         to create a gradient across all plots. If False, colors are
         used as discrete values. Default is False.
+    xlim : tuple[float, float], optional
+        The x-axis limits as (min, max). If None, matplotlib will
+        automatically determine the limits. Default is None.
+    ylim : tuple[float, float], optional
+        The y-axis limits as (min, max). If None, matplotlib will
+        automatically determine the limits. Default is None.
     ax : Axes, optional
         Matplotlib axes object to draw the plot on. If provided, the plot
         will be drawn on this axes instead of creating a new figure.
@@ -126,6 +132,8 @@ class LinePlot(MatplotlibPlot):
         labels: str | list[str] | None = None,
         colors: str | list[str] | None = None,
         gradient: bool = False,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
         ax: Axes | None = None,
         **kwargs
     ) -> None:
@@ -143,6 +151,8 @@ class LinePlot(MatplotlibPlot):
         self.ylabel = ylabel
         self.grid_enabled = grid
         self.gradient = gradient
+        self.xlim = xlim
+        self.ylim = ylim
         self.external_ax = ax
 
         # Process data into lists for consistent handling
@@ -381,6 +391,12 @@ class LinePlot(MatplotlibPlot):
             colors=axes_border_color,
             labelcolor=text_color
         )
+
+        # Apply axis limits if provided
+        if self.xlim is not None:
+            ax.set_xlim(self.xlim)
+        if self.ylim is not None:
+            ax.set_ylim(self.ylim)
 
         # Add legend if there are labels
         if any(label is not None for label in self.plot_labels):
