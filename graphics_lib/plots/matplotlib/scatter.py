@@ -767,6 +767,11 @@ class ScatterPlot(MatplotlibPlot):
             if self.palette and 'neutral_light' in self.palette.colours
             else 'white'
         )
+        background_color = (
+            str(self.palette.colours['background'])
+            if self.palette and 'background' in self.palette.colours
+            else 'white'
+        )
         axes_border_color = (
             str(self.palette.colours['neutral_dark'])
             if self.palette and 'neutral_dark' in self.palette.colours
@@ -815,7 +820,7 @@ class ScatterPlot(MatplotlibPlot):
         )
 
         # Set background colors
-        self.fig.patch.set_facecolor(neutral_color)
+        self.fig.patch.set_facecolor(background_color)
         ax.set_facecolor(neutral_color)
 
         # Style spines
